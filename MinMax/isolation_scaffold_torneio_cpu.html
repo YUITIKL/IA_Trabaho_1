@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Isolation</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Georgia, serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; padding: 24px 16px; }
+
+h1 { text-align: center; font-size: 1.5rem; color: #c8b8f8; letter-spacing: 3px; margin-bottom: 4px; }
+.subtitle { text-align: center; font-size: 0.8rem; color: #666; margin-bottom: 20px; letter-spacing: 1px; }
+
+.layout { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; align-items: flex-start; }
+
+/* BOARD */
+.board-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.board {
+  display: grid;
+  grid-template-columns: repeat(7, 54px);
+  grid-template-rows: repeat(7, 54px);
+  gap: 3px; background: #0a0a18; padding: 8px;
+  border-radius: 10px; border: 1px solid #2a2a4a;
+}
+.cell {
+  width: 54px; height: 54px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background 0.12s, transform 0.1s;
+  background: #16213e; border: 1px solid #1e2a4a;
+  font-size: 0.7rem; color: #444; user-select: none;
+}
+.cell.free:hover      { background: #22306a; transform: scale(1.05); }
+.cell.blocked         { background: #09090f; border-color: #111; cursor: default; color: #222; }
+.cell.blocked::after  { content: '✕'; font-size: 1rem; }
+.cell.p1              { background: #0e2a4a; border: 1px solid #3a7acc; }
+.cell.p2              { background: #3a0e2a; border: 1px solid #cc3a7a; }
+.cell.selected        { border: 2px solid #7aff9a; background: #1a4a2a; }
+.cell.reachable       { background: #0e2a18; border: 1px solid #3acc6a; cursor: pointer; }
+.cell.reachable:hover { background: #1a4a28; transform: scale(1.05); }
+
+/* STATUS */
+.status-bar {
+  background: #0d0d1a; border: 1px solid #2a2a4a; border-radius: 8px;
+  padding: 9px 18px; text-align: center; font-size: 0.88rem;
+  min-width: 390px; line-height: 1.4;
+}
+.t1   { color: #5a9fdc; }
+.t2   { color: #dc5a9f; }
+.twin { color: #7aff9a; font-size: 1rem; font-weight: bold; }
+
+/* CONTROLS */
+.controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+button {
+  background: #14203a; color: #c8b8f8; border: 1px solid #3a3060;
+  border-radius: 6px; padding: 7px 14px; font-size: 0.78rem;
+  cursor: pointer; transition: background 0.12s; font-family: Georgia, serif;
+  letter-spacing: 0.5px;
+}
+button:hover    { background: #222860; }
+button:disabled { opacity: 0.35; cursor: default; }
+button.active   { background: #2a2060; border-color: #7a60ff; }
+
+/* LEGEND */
+.legend { display: flex; gap: 14px; font-size: 0.75rem; color: #777; flex-wrap: wrap; justify-content: center; }
+.legend span { display: flex; align-items: center; gap: 5px; }
+.dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+/* PANELS */
+.panels { display: flex; flex-direction: column; gap: 14px; min-width: 260px; max-width: 300px; }
+.panel { background: #0d0d1a; border: 1px solid #2a2a4a; border-radius: 10px; padding: 14px 16px; }
+.panel h3 { font-size: 0.72rem; letter-spacing: 1.5px; text-transform: uppercase; color: #666; margin-bottom: 10px; }
+
+/* SCORE */
+.score-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.slabel { font-size: 0.8rem; color: #999; }
+.sval   { font-size: 1rem; font-weight: bold; }
+.sval.c1 { color: #5a9fdc; }
+.sval.c2 { color: #dc5a9f; }
+
+/* LOG */
+.move-log { max-height: 130px; overflow-y: auto; font-size: 0.73rem; color: #777; }
+.move-log div { padding: 2px 0; border-bottom: 1px solid #141420; }
+.move-log .lp1 { color: #5a9fdc; }
+.move-log .lp2 { color: #dc5a9f; }
+
+/* TOURNAMENT */
+.tournament { font-size: 0.78rem; color: #aaa; line-height: 1.6; }
+.tournament b { color: #c8b8f8; }
+.tourn-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.tourn-val { font-weight: bold; }
+.tv1 { color: #5a9fdc; }
+.tv2 { color: #dc5a9f; }
+
+/* CPU select */
+.cpu-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.cpu-row label { font-size: 0.78rem; color: #999; min-width: 28px; }
+select {
+  background: #14203a; color: #c8b8f8; border: 1px solid #3a3060;
+  border-radius: 5px; padding: 4px 8px; font-size: 0.75rem;
+  font-family: Georgia, serif; flex: 1;
+}
+select:disabled { opacity: 0.4; }
+
+/* CPU action buttons */
+.cpu-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.cpu-actions button { font-size: 0.73rem; padding: 5px 10px; }
+
+/* RULES */
+.rules-text { font-size: 0.78rem; color: #aaa; line-height: 1.6; }
+.rules-text b { color: #c8b8f8; }
+
+/* note badge */
+.note-badge {
+  display: inline-block; background: #1a2a00; border: 1px solid #4a7a00;
+  color: #9adf40; font-size: 0.68rem; border-radius: 4px;
+  padding: 2px 7px; margin-bottom: 8px; letter-spacing: 0.5px;
+}
+</style>
+</head>
+<body>
+
+<h1>⚔ ISOLATION</h1>
+<p class="subtitle">jogo de dois jogadores · tabuleiro 7×7</p>
+
+<div class="layout">
+
+  <!-- BOARD -->
+  <div class="board-wrap">
+    <div class="board" id="board"></div>
+    <div class="status-bar" id="status"></div>
+    <div class="legend">
+      <span><span class="dot" style="background:#3a7acc"></span> Jogador 1</span>
+      <span><span class="dot" style="background:#cc3a7a"></span> Jogador 2</span>
+      <span><span class="dot" style="background:#0e2a18;border:1px solid #3acc6a"></span> Movimentos válidos</span>
+      <span><span class="dot" style="background:#09090f;border:1px solid #222"></span> Bloqueada</span>
+    </div>
+    <div class="controls">
+      <button onclick="pararAuto(); resetGame()">↺ Reiniciar</button>
+      <button id="btn-step" onclick="cpuStep()">▶ CPU joga 1 lance</button>
+      <button id="btn-auto" onclick="toggleAuto()">⏩ Auto</button>
+    </div>
+  </div>
+
+  <!-- PANELS -->
+  <div class="panels">
+
+    <!-- CPU config -->
+    <div class="panel">
+      <h3>Configuração dos agentes</h3>
+      <div class="cpu-row">
+        <label class="t1">P1</label>
+        <select id="sel-p1">
+          <option value="humano">Humano</option>
+          <option value="aleatoria" selected>CPU — Aleatória</option>
+          <option value="movimentos_possiveis">CPU — Movimentos Possíveis</option>
+          <option value="ofensiva_defensiva">CPU — Ofensiva/Defensiva</option>
+        </select>
+      </div>
+      <div class="cpu-row">
+        <label class="t2">P2</label>
+        <select id="sel-p2">
+          <option value="humano">Humano</option>
+          <option value="aleatoria" selected>CPU — Aleatória </option>
+          <option value="movimentos_possiveis">CPU — Movimentos Possíveis</option>
+          <option value="ofensiva_defensiva">CPU — Ofensiva/Defensiva</option>
+        </select>
+      </div>
+      <div style="font-size:0.72rem;color:#555;margin-top:4px">
+        Implemente H1 e H2 no código para desbloqueá-las.
+      </div>
+    </div>
+
+    <!-- Tournament stats -->
+    <div class="panel">
+      <h3>Torneio (sessão atual)</h3>
+      <div class="tourn-row">
+        <span class="slabel">Vitórias P1</span>
+        <span class="tourn-val tv1" id="wins1">0</span>
+      </div>
+      <div class="tourn-row">
+        <span class="slabel">Vitórias P2</span>
+        <span class="tourn-val tv2" id="wins2">0</span>
+      </div>
+      <div class="tourn-row">
+        <span class="slabel">Partidas jogadas</span>
+        <span class="tourn-val" id="total-games" style="color:#888">0</span>
+      </div>
+      <div class="tourn-row">
+        <span class="slabel">Estados expandidos / jogada</span>
+        <span class="tourn-val" id="avg-exp" style="color:#888">—</span>
+      </div>
+      <div class="tourn-row">
+        <span class="slabel">Tempo médio / jogada (ms)</span>
+        <span class="tourn-val" id="avg-time" style="color:#888">—</span>
+      </div>
+      <div class="cpu-actions">
+        <button onclick="resetTournament()">↺ Zerar torneio</button>
+      </div>
+    </div>
+
+    <!-- Game state -->
+    <div class="panel">
+      <h3>Estado atual</h3>
+      <div class="score-row">
+        <span class="slabel">Movimentos P1</span>
+        <span class="sval c1" id="m1">—</span>
+      </div>
+      <div class="score-row">
+        <span class="slabel">Movimentos P2</span>
+        <span class="sval c2" id="m2">—</span>
+      </div>
+      <div class="score-row">
+        <span class="slabel">Turno nº</span>
+        <span class="sval" id="turn-n" style="color:#888">1</span>
+      </div>
+    </div>
+
+    <!-- Rules -->
+    <div class="panel">
+      <h3>Regras</h3>
+      <div class="rules-text">
+        <b>Objetivo:</b> deixar o adversário sem movimentos.<br><br>
+        <b>Movimento:</b> o peão se move como a rainha do xadrez — em linha reta nas 8 direções, qualquer número de casas. Não pode saltar casas bloqueadas nem o peão adversário.<br><br>
+        <b>Bloqueio:</b> a casa de origem fica bloqueada permanentemente após cada movimento.<br><br>
+        <b>Derrota:</b> quem não tiver movimentos no seu turno perde.
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="panel">
+      <h3>Log de movimentos</h3>
+      <div class="move-log" id="move-log"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  ISOLATION — Scaffold para trabalho prático
+//  Inteligência Artificial — Ciência da Computação — UFSC
+//  Professor: Elder Rizzon Santos
+//  Equipe: ____________________________
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ROWS = 7, COLS = 7;
+const DIRS = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+
+// ── ESTRUTURA DE ESTADO ─────────────────────────────────────────────────────
+// state = {
+//   board : matriz ROWS×COLS  (0=livre, 1=bloqueada, 2=peão P1, 3=peão P2)
+//   p1    : {r, c}  posição de P1
+//   p2    : {r, c}  posição de P2
+//   turn  : 1 ou 2  jogador da vez
+// }
+
+// ── FUNÇÃO AUXILIAR (disponível para uso nas heurísticas) ───────────────────
+
+function movimentosValidos(state, player) {
+  const pos = player === 1 ? state.p1 : state.p2;
+  const moves = [];
+  for (const [dr, dc] of DIRS) {
+    let nr = pos.r + dr, nc = pos.c + dc;
+    while (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && state.board[nr][nc] === 0) {
+      moves.push({ r: nr, c: nc });
+      nr += dr; nc += dc;
+    }
+  }
+  return moves;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  HEURÍSTICA DE EXEMPLO — agente aleatório
+//  Retorna um número aleatório. Não captura nenhuma informação do estado.
+//  Serve apenas para demonstrar o funcionamento do torneio.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function heuristica_aleatoria(state) {
+  return Math.random() * 2 - 1; // valor entre -1 e +1, sem sentido estratégico
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  HEURÍSTICA 1 — implementar
+//
+//  Convenção de retorno (perspectiva de P1 — maximizador):
+//    valor > 0  →  vantagem de P1
+//    valor < 0  →  vantagem de P2
+//    valor = 0  →  posição equilibrada
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Resumo: A heurística desenvolvida busca calcular o número de movimentos válidos disponíveis para cada jogador para cada movimento possível, 
+// retornando a diferença entre o número de movimentos. Considera-se estar em vantagem o jogador com o maior número de movimentos possíveis após a ação. 
+function heuristica_movimentos_possiveis(state) {
+  const board = state.board;
+  const player1 = state.p1;
+  const player2 = state.p2;
+  let moves1 = 0, moves2 = 0;
+
+  for (let i = 0; i < 8; i++) {
+    const dirs_lin = DIRS[i][0]
+    const dirs_col = DIRS[i][1];
+
+    let linha = player1.r + dirs_lin
+    let col = player1.c + dirs_col;
+    while (linha >= 0 && linha < ROWS && col >= 0 && col < COLS && board[linha][col] === 0) {
+      moves1++;
+      linha += dirs_lin; col += dirs_col;
+    }
+
+    linha = player2.r + dirs_lin
+    col = player2.c + dirs_col;
+    while (linha >= 0 && linha < ROWS && col >= 0 && col < COLS && board[linha][col] === 0) {
+      moves2++;
+      linha += dirs_lin; col += dirs_col;
+    }
+  }
+
+  return moves1 - moves2;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  HEURÍSTICA 2 — implementar
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Resumo: A heurística desenvolvida alterna entre bloquear o oponente no início e maximizar os próprios caminhos na segunda metade.
+function heuristica_ofensiva_defensiva(state) {
+  const board = state.board;
+  const player1 = state.p1;
+  const player2 = state.p2;
+  let moves1 = 0;
+  let moves2 = 0;
+  let contagem_lances = state.ply_count;
+
+  if (contagem_lances == null) {
+    contagem_lances = 0;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (board[r][c] === 1) contagem_lances++;
+      }
+    }
+  }
+
+  for (let i = 0; i < 8; i++) {
+    const dirs_lin = DIRS[i][0];
+    const dirs_col = DIRS[i][1];
+
+    let linha = player1.r + dirs_lin;
+    let col = player1.c + dirs_col;
+    while (linha >= 0 && linha < ROWS && col >= 0 && col < COLS && board[linha][col] === 0) {
+      moves1++;
+      linha += dirs_lin; col += dirs_col;
+    }
+
+    linha = player2.r + dirs_lin;
+    col = player2.c + dirs_col;
+    while (linha >= 0 && linha < ROWS && col >= 0 && col < COLS && board[linha][col] === 0) {
+      moves2++;
+      linha += dirs_lin; col += dirs_col;
+    }
+  }
+
+  const ratio = contagem_lances / (ROWS * COLS);
+  return ratio <= 0.5
+    ? moves1 - (moves2 * 2)
+    : (moves1 * 2) - moves2;
+}
+
+// ── TABELA DE HEURÍSTICAS ────────────────────────────────────────────────────
+// Mapeamento usado pelos seletores de agente na interface.
+// Ao implementar H1 ou H2, elas são desbloqueadas automaticamente.
+
+const HEURISTICAS = {
+  aleatoria: heuristica_aleatoria,
+  movimentos_possiveis:        heuristica_movimentos_possiveis,
+  ofensiva_defensiva:        heuristica_ofensiva_defensiva,
+};
+
+function heuristicaDisponivel(key) {
+  try { HEURISTICAS[key]({ board: Array.from({length:ROWS},()=>Array(COLS).fill(0)), p1:{r:0,c:0}, p2:{r:6,c:6}, turn:1 }); return true; }
+  catch(e) { return e.message !== `${key === 'h1' ? 'heuristica_1' : 'heuristica_2'} não implementada`; }
+}
+
+// ── MINIMAX COM PODA ALFA-BETA ────────────────────────────────────────────────
+
+const DEPTH = 3; // profundidade de busca — ajuste conforme necessário
+
+let expandidos = 0; // contador global de estados expandidos por jogada
+
+function minimax(state, depth, alpha, beta, maximizing, heurFn) {
+  const player = maximizing ? 1 : 2;
+  const moves  = movimentosValidos(state, player);
+
+  expandidos++;
+
+  if (moves.length === 0) return maximizing ? -10000 : 10000;
+  if (depth === 0)        return heurFn(state);
+
+  if (maximizing) {
+    let best = -Infinity;
+    for (const m of moves) {
+      best  = Math.max(best, minimax(aplicarMovimento(state, 1, m), depth-1, alpha, beta, false, heurFn));
+      alpha = Math.max(alpha, best);
+      if (beta <= alpha) break;
+    }
+    return best;
+  } else {
+    let best = Infinity;
+    for (const m of moves) {
+      best = Math.min(best, minimax(aplicarMovimento(state, 2, m), depth-1, alpha, beta, true, heurFn));
+      beta = Math.min(beta, best);
+      if (beta <= alpha) break;
+    }
+    return best;
+  }
+}
+
+function melhorMovimento(state, player, heurFn) {
+  const moves = movimentosValidos(state, player);
+  if (!moves.length) return null;
+  let bestVal  = player === 1 ? -Infinity : Infinity;
+  let bestMove = moves[0];
+  expandidos = 0;
+  const t0 = performance.now();
+  for (const m of moves) {
+    const ns = aplicarMovimento(state, player, m);
+    const v  = minimax(ns, DEPTH-1, -Infinity, Infinity, player === 2, heurFn);
+    if ((player === 1 && v > bestVal) || (player === 2 && v < bestVal)) {
+      bestVal  = v;
+      bestMove = m;
+    }
+  }
+  return { move: bestMove, expanded: expandidos, ms: performance.now() - t0 };
+}
+
+// ── LÓGICA DO JOGO ────────────────────────────────────────────────────────────
+
+function aplicarMovimento(st, player, to) {
+  const ns   = clonarEstado(st);
+  const from = player === 1 ? ns.p1 : ns.p2;
+  ns.board[from.r][from.c] = 1;
+  ns.board[to.r][to.c]     = player === 1 ? 2 : 3;
+  if (player === 1) ns.p1 = { r: to.r, c: to.c };
+  else              ns.p2 = { r: to.r, c: to.c };
+  ns.turn = 3 - player;
+  return ns;
+}
+
+function clonarEstado(st) {
+  return {
+    board: st.board.map(r => [...r]),
+    p1: { ...st.p1 }, p2: { ...st.p2 },
+    turn: st.turn
+  };
+}
+
+// ── ESTADO GLOBAL ─────────────────────────────────────────────────────────────
+
+const tourn = { w1: 0, w2: 0, games: 0, totalExp: 0, totalMs: 0, totalMoves: 0 };
+
+let game = {
+  state: null, selected: false, over: false, turnN: 1, auto: false
+};
+
+function agentKey(player) {
+  return document.getElementById(player === 1 ? 'sel-p1' : 'sel-p2').value;
+}
+
+function isCPU(player) { return agentKey(player) !== 'humano'; }
+
+function heurFn(player) { return HEURISTICAS[agentKey(player)]; }
+
+function resetGame() {
+  // Não cancela game.auto — o torneio continua entre partidas
+  const board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+  board[0][0] = 2;
+  board[6][6] = 3;
+  game.state    = { board, p1: { r:0, c:0 }, p2: { r:6, c:6 }, turn: 1 };
+  game.selected = false;
+  game.over     = false;
+  game.turnN    = 1;
+
+  document.getElementById('move-log').innerHTML = '';
+  atualizarSeletores();
+  render();
+}
+
+function resetTournament() {
+  tourn.w1 = tourn.w2 = tourn.games = tourn.totalExp = tourn.totalMs = tourn.totalMoves = 0;
+  renderTournament();
+}
+
+function atualizarSeletores() {
+  // Desabilitar opções de H1/H2 se não implementadas
+  for (const sel of ['sel-p1','sel-p2']) {
+    const el = document.getElementById(sel);
+    for (const opt of el.options) {
+      if (opt.value === 'movimentos_possiveis') opt.disabled = !heuristicaDisponivel('movimentos_possiveis');
+      if (opt.value === 'ofensiva_defensiva') opt.disabled = !heuristicaDisponivel('ofensiva_defensiva');
+    }
+  }
+}
+
+// ── CPU ───────────────────────────────────────────────────────────────────────
+
+function cpuStep() {
+  if (!game.over) runCPUIfNeeded();
+}
+
+function pararAuto() {
+  game.auto = false;
+  document.getElementById('btn-auto').textContent = '⏩ Auto';
+}
+
+function toggleAuto() {
+  const btn = document.getElementById('btn-auto');
+  game.auto = !game.auto;
+  btn.textContent = game.auto ? '⏹ Parar' : '⏩ Auto';
+  if (game.auto) agendarProximo(300);
+}
+
+function agendarProximo(delay) {
+  setTimeout(() => {
+    if (!game.auto) return;
+    if (game.over) {
+      tourn.games++;
+      renderTournament();
+      resetGame();
+      agendarProximo(300);
+    } else if (isCPU(game.state.turn)) {
+      runCPUIfNeeded();
+    } else {
+      agendarProximo(300);
+    }
+  }, delay);
+}
+
+function runCPUIfNeeded(encadear = true) {
+  if (game.over || !isCPU(game.state.turn)) return;
+  const player = game.state.turn;
+  const res = melhorMovimento(game.state, player, heurFn(player));
+  if (!res || !res.move) { encerrarJogo(); return; }
+
+  tourn.totalExp   += res.expanded;
+  tourn.totalMs    += res.ms;
+  tourn.totalMoves += 1;
+
+  registrarMovimento(player,
+    player === 1 ? game.state.p1 : game.state.p2, res.move);
+  game.state = aplicarMovimento(game.state, player, res.move);
+  game.turnN++;
+  verificarFim();
+  render();
+  // Encadeia próximo lance apenas se estiver no modo Auto
+  if (game.auto && !game.over) agendarProximo(60);
+}
+
+function verificarFim() {
+  if (movimentosValidos(game.state, game.state.turn).length === 0) {
+    encerrarJogo();
+  }
+}
+
+function encerrarJogo() {
+  game.over = true;
+  const winner = 3 - game.state.turn;
+  if (winner === 1) tourn.w1++; else tourn.w2++;
+  renderTournament();
+  render();
+}
+
+// ── INTERAÇÃO HUMANA ──────────────────────────────────────────────────────────
+
+function clicarCelula(r, c) {
+  if (game.over || isCPU(game.state.turn)) return;
+  const player = game.state.turn;
+  const pos    = player === 1 ? game.state.p1 : game.state.p2;
+
+  if (r === pos.r && c === pos.c) {
+    game.selected = !game.selected;
+    render(); return;
+  }
+  if (game.selected) {
+    const moves  = movimentosValidos(game.state, player);
+    const valido = moves.some(m => m.r === r && m.c === c);
+    if (valido) {
+      registrarMovimento(player, pos, { r, c });
+      game.state    = aplicarMovimento(game.state, player, { r, c });
+      game.selected = false;
+      game.turnN++;
+      verificarFim();
+      render();
+      if (!game.over && !game.auto) setTimeout(() => runCPUIfNeeded(), 120);
+      if (!game.over &&  game.auto) agendarProximo(120);
+    } else {
+      game.selected = false;
+      render();
+    }
+  }
+}
+
+function registrarMovimento(player, from, to) {
+  const log = document.getElementById('move-log');
+  const div = document.createElement('div');
+  div.className   = player === 1 ? 'lp1' : 'lp2';
+  div.textContent = `P${player}: (${from.r},${from.c}) → (${to.r},${to.c})`;
+  log.prepend(div);
+}
+
+// ── RENDERIZAÇÃO ──────────────────────────────────────────────────────────────
+
+function render() {
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+  const st     = game.state;
+  const player = st.turn;
+  const pos    = player === 1 ? st.p1 : st.p2;
+  const moves  = (game.over || !game.selected) ? [] : movimentosValidos(st, player);
+  const rSet   = new Set(moves.map(m => m.r * COLS + m.c));
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      const v = st.board[r][c];
+      if (v === 1) {
+        cell.classList.add('blocked');
+      } else if (v === 2) {
+        cell.classList.add('p1');
+        cell.innerHTML = '<span style="font-size:1.5rem">🔵</span>';
+        if (game.selected && player === 1) cell.classList.add('selected');
+      } else if (v === 3) {
+        cell.classList.add('p2');
+        cell.innerHTML = '<span style="font-size:1.5rem">🔴</span>';
+        if (game.selected && player === 2) cell.classList.add('selected');
+      } else if (rSet.has(r * COLS + c)) {
+        cell.classList.add('reachable');
+        cell.innerHTML = `<span style="color:#2a6a3a;font-size:0.62rem">${r},${c}</span>`;
+      } else {
+        cell.classList.add('free');
+        cell.innerHTML = `<span style="font-size:0.6rem;color:#1e2a4a">${r},${c}</span>`;
+      }
+      cell.addEventListener('click', () => clicarCelula(r, c));
+      boardEl.appendChild(cell);
+    }
+  }
+
+  // Status
+  const statusEl = document.getElementById('status');
+  if (game.over) {
+    const winner = 3 - st.turn;
+    statusEl.innerHTML =
+      `<span class="twin">🏆 Jogador ${winner} vence!</span>` +
+      ` <span style="color:#555">— P${st.turn} ficou sem movimentos</span>`;
+  } else {
+    const cls  = player === 1 ? 't1' : 't2';
+    const hint = isCPU(player)
+      ? '— aguardando CPU...'
+      : (game.selected ? '— clique numa casa verde para mover' : '— clique no seu peão');
+    statusEl.innerHTML =
+      `<span class="${cls}">Vez do Jogador ${player}</span> <span style="color:#555">${hint}</span>`;
+  }
+
+  document.getElementById('m1').textContent    = movimentosValidos(st, 1).length;
+  document.getElementById('m2').textContent    = movimentosValidos(st, 2).length;
+  document.getElementById('turn-n').textContent = game.turnN;
+}
+
+function renderTournament() {
+  document.getElementById('wins1').textContent      = tourn.w1;
+  document.getElementById('wins2').textContent      = tourn.w2;
+  document.getElementById('total-games').textContent = tourn.games;
+  const avgExp  = tourn.totalMoves ? (tourn.totalExp / tourn.totalMoves).toFixed(1)  : '—';
+  const avgTime = tourn.totalMoves ? (tourn.totalMs  / tourn.totalMoves).toFixed(2) : '—';
+  document.getElementById('avg-exp').textContent  = avgExp;
+  document.getElementById('avg-time').textContent = avgTime;
+}
+
+// ── INICIALIZAÇÃO ─────────────────────────────────────────────────────────────
+resetGame();
+</script>
+</body>
+</html>
